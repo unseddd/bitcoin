@@ -62,4 +62,12 @@ struct ReconState {
      * to better predict future set size differences.
      */
     double m_local_q;
+
+    /**
+     * Store all transactions which we would relay to the peer (policy checks passed, etc.) in this set
+     * instead of announcing them right away. When reconciliation time comes, we will
+     * compute an efficient representation of this set ("sketch") and use it to efficient reconcile
+     * this set with a similar set on the other side of the connection.
+     */
+    std::set<uint256> m_local_set;
 };
