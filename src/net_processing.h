@@ -7,6 +7,7 @@
 #define BITCOIN_NET_PROCESSING_H
 
 #include <net.h>
+#include <reconciliation.h>
 #include <sync.h>
 #include <validationinterface.h>
 
