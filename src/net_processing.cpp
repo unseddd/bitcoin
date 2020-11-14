@@ -4961,6 +4961,8 @@ bool PeerManagerImpl::SendMessages(CNode* pto)
         }
         if (!vInv.empty())
             m_connman.PushMessage(pto, msgMaker.Make(NetMsgType::INV, vInv));
+
+        LOCK(peer->m_recon_state_mutex);
         //
         // Message: reconciliation request
         //
@@ -4970,7 +4972,6 @@ bool PeerManagerImpl::SendMessages(CNode* pto)
             // To make reconciliation predictable and efficient, we reconcile with peers in order based on the queue,
             // and with a delay between requests.
             if (m_next_recon_request < current_time && m_recon_queue.back() == pto) {
-                LOCK(peer->m_recon_state_mutex);
                 assert(peer->m_recon_state->m_responder); // Should not be in the queue otherwise
                 if (peer->m_recon_state->m_outgoing_recon != RECON_NONE) {
                     // Do not initiate a new reconciliation if the old one is still in progress
@@ -4984,6 +4985,27 @@ bool PeerManagerImpl::SendMessages(CNode* pto)
                 UpdateNextReconRequest(current_time);
                 m_recon_queue.pop_back();
                 m_recon_queue.push_front(pto);
+            }
+        }
+
+        //
+        // Message: reconciliation response
+        //
+        if (peer->m_recon_state) {
+            // Respond to a requested reconciliation to enable efficient transaction exchange.
+            // Respond only periodically to a) limit CPU usage for sketch computation,
+            // and, b) limit transaction possession privacy leak.
+            if (peer->m_recon_state->m_incoming_recon == RECON_INIT_REQUESTED && current_time > peer->m_recon_state->m_next_recon_respond) {
+                std::vector<unsigned char> response_skdata;
+                uint16_t sketch_capacity = peer->m_recon_state->EstimateSketchCapacity();
+                Minisketch sketch = peer->m_recon_state->ComputeSketch(peer->m_recon_state->m_local_set, sketch_capacity);
+                if (sketch) {
+                    response_skdata = sketch.Serialize();
+                }
+                m_connman.PushMessage(pto, msgMaker.Make(NetMsgType::SKETCH, response_skdata));
+
+                peer->m_recon_state->m_incoming_recon = RECON_INIT_RESPONDED;
+                peer->m_recon_state->m_local_set.clear();
             }
         }
 
