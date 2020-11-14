@@ -270,7 +270,12 @@ struct ReconState {
             // When reconciliation initialized by us is done, update local q for future reconciliations.
             if (action == Q_RECOMPUTE) {
                 assert(m_outgoing_recon != RECON_NONE);
-                uint8_t local_set_size = m_local_set.size();
+                uint8_t local_set_size;
+                if (m_outgoing_recon == RECON_EXT_REQUESTED) {
+                    local_set_size = m_local_set_snapshot.size();
+                } else {
+                    local_set_size = m_local_set.size();
+                }
                 uint8_t remote_set_size = local_set_size + actual_local_missing - actual_remote_missing;
                 uint8_t set_size_diff = std::abs(local_set_size - remote_set_size);
                 uint8_t min_size = std::min(local_set_size, remote_set_size);
