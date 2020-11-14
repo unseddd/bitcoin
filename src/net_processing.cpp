@@ -5073,6 +5073,11 @@ bool PeerManagerImpl::SendMessages(CNode* pto)
                 m_connman.PushMessage(pto, msgMaker.Make(NetMsgType::SKETCH, response_skdata));
 
                 peer->m_recon_state->m_incoming_recon = RECON_INIT_RESPONDED;
+                // Be ready to respond to extension request, to compute the extended sketch over
+                // the same initial set (without transactions received during the reconciliation).
+                // Allow to store new transactions separately in the original set.
+                peer->m_recon_state->m_capacity_snapshot = sketch_capacity;
+                peer->m_recon_state->m_local_set_snapshot = peer->m_recon_state->m_local_set;
                 peer->m_recon_state->m_local_set.clear();
             }
         }
