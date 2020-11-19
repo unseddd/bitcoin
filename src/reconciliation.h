@@ -241,6 +241,15 @@ struct ReconState {
         return sketch;
     }
 
+    Minisketch ComputeExtendedSketch() {
+        // For now, compute a sketch of twice the capacity were computed originally.
+        // If the sketch is meant to be sent, drop the lower syndromes.
+        // TODO: optimize by computing the extension *on top* of the existent sketch
+        // instead of computing the lower order elements again.
+        uint16_t extended_capacity = m_capacity_snapshot * 2;
+        return ComputeSketch(m_local_set_snapshot, extended_capacity);
+    }
+
     /**
      * Clears the state of the peer when the reconciliation is done.
      * If this is a extension finalization, keep the reconciliation set to track
