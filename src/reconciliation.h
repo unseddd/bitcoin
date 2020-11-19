@@ -20,6 +20,11 @@ static constexpr std::chrono::microseconds RECON_REQUEST_INTERVAL{16s};
 static constexpr std::chrono::microseconds RECON_RESPONSE_INTERVAL{2s};
 /** The size of the field, used to compute sketches to reconcile transactions (see BIP-330). */
 static constexpr unsigned int RECON_FIELD_SIZE = 32;
+/**
+ * Allows to infer capacity of a reconciliation sketch based on it's char[] representation,
+ * which is necessary to deserealize a received sketch.
+ */
+static constexpr unsigned int BYTES_PER_SKETCH_CAPACITY = RECON_FIELD_SIZE / 8;
 /** Limit sketch capacity to avoid DoS. */
 static constexpr uint16_t MAX_SKETCH_CAPACITY = 2 << 12;
 /**
