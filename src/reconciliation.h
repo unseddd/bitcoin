@@ -40,6 +40,7 @@ static_assert(RECON_FALSE_POSITIVE_COEF <= 256,
 /**
  * Used to keep track of the current reconciliation round with a peer.
  * Used for both inbound (responded) and outgoing (requested/initiated) reconciliations.
+ * Currently only one sketch extension request is supported.
  */
 enum ReconPhase {
     RECON_NONE,
@@ -167,6 +168,13 @@ struct ReconState {
     ReconPhase m_incoming_recon{RECON_NONE};
 
     /**
+     * In a reconciliation round initiated by us, if we asked for an extension, we want to store
+     * the sketch computed/transmitted in the initial step, so that we can use it when
+     * sketch extension arrives.
+     */
+    std::vector<uint8_t> m_remote_sketch_snapshot;
+
+    /**
      * Reconciliation sketches are computed over short transaction IDs.
      * Short IDs are salted with a link-specific constant value.
      */
@@ -254,6 +262,8 @@ struct ReconState {
         if (clear_local_set) m_local_set.clear();
 
         m_local_short_id_mapping.clear();
+        // This is currently belt-and-suspenders, as the code should work even without these calls.
+        m_remote_sketch_snapshot.clear();
     }
 
     /**
