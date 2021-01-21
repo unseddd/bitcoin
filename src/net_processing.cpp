@@ -360,6 +360,13 @@ private:
     std::chrono::microseconds m_next_recon_request{0};
     void UpdateNextReconRequest(std::chrono::microseconds now) EXCLUSIVE_LOCKS_REQUIRED(m_recon_queue_mutex);
 
+    /**
+     * Used to schedule the next initial response for any pending reconciliation request.
+     * Respond to all requests at the same time to prevent transaction possession leak.
+     */
+    std::chrono::microseconds m_next_recon_respond{0};
+    std::chrono::microseconds NextReconRespond(std::chrono::microseconds now);
+
     const CChainParams& m_chainparams;
     CConnman& m_connman;
     /** Pointer to this node's banman. May be nullptr - check existence before dereferencing. */
@@ -996,6 +1003,14 @@ void PeerManagerImpl::AddTxAnnouncement(const CNode& node, const GenTxid& gtxid,
 void PeerManagerImpl::UpdateNextReconRequest(std::chrono::microseconds now)
 {
     m_next_recon_request = now + RECON_REQUEST_INTERVAL / m_recon_queue.size();
+}
+
+std::chrono::microseconds PeerManagerImpl::NextReconRespond(std::chrono::microseconds now)
+{
+    if (m_next_recon_respond < now) {
+        m_next_recon_respond = now + RECON_RESPONSE_INTERVAL;
+    }
+    return m_next_recon_respond;
 }
 
 // This function is used for testing the stale tip eviction logic, see
@@ -4142,6 +4157,28 @@ void PeerManagerImpl::ProcessMessage(CNode& pfrom, const std::string& msg_type, 
                 }
             }
         }
+        return;
+    }
+
+    std::chrono::microseconds current_time = GetTime<std::chrono::microseconds>();
+
+    // Record an (expected) reconciliation request with parameters to respond when time comes.
+    // All initial reconciliation responses will be done at the same time to prevent tx-related privacy leaks.
+    if (msg_type == NetMsgType::REQRECON) {
+        LOCK(peer->m_recon_state_mutex);
+        if (peer->m_recon_state == nullptr) return;
+        if (!peer->m_recon_state->m_requestor) return;
+        if (peer->m_recon_state->m_incoming_recon != RECON_NONE) return;
+        uint16_t peer_recon_set_size, peer_q;
+        vRecv >> peer_recon_set_size >> peer_q;
+        peer->m_recon_state->m_incoming_recon = RECON_INIT_REQUESTED;
+        peer->m_recon_state->m_remote_set_size = peer_recon_set_size;
+        peer->m_recon_state->m_remote_q = double(peer_q / Q_PRECISION);
+        double remote_q = double(peer_q / Q_PRECISION);
+        assert(remote_q >= 0);
+        if (remote_q > 2) return;
+        peer->m_recon_state->m_remote_q = remote_q;
+        peer->m_recon_state->m_next_recon_respond = NextReconRespond(current_time);
         return;
     }
 
