@@ -122,4 +122,15 @@ struct ReconState {
     /** Keep track of reconciliations with the peer. */
     ReconPhase m_outgoing_recon{RECON_NONE};
     ReconPhase m_incoming_recon{RECON_NONE};
+
+    /**
+     * Reconciliation sketches are computed over short transaction IDs.
+     * Short IDs are salted with a link-specific constant value.
+     */
+    uint32_t ComputeShortID(const uint256 wtxid) const
+    {
+        uint64_t s = SipHashUint256(m_k0, m_k1, wtxid);
+        uint32_t short_txid = 1 + (s & 0xFFFFFFFF);
+        return short_txid;
+    }
 };
