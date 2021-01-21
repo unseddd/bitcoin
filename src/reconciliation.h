@@ -1,5 +1,26 @@
 /** Static component of the salt used to compute short txids for transaction reconciliation. */
 static const std::string RECON_STATIC_SALT = "Tx Relay Salting";
+/** Used to convert a floating point reconciliation coefficient q to an int for transmission. Specified by BIP-330. */
+static constexpr uint16_t Q_PRECISION{(2 << 14) - 1};
+/**
+ * Interval between sending reconciliation request to the same peer.
+ * This value allows to reconcile ~100 transactions (7 tx/s * 16s) during normal system operation at capacity.
+ * More frequent reconciliations would cause significant constant bandwidth overhead due to
+ * reconciliation metadata (sketch sizes etc.), which would nullify the efficiency.
+ * Less frequent reconciliations would introduce high transaction relay latency.
+ */
+static constexpr std::chrono::microseconds RECON_REQUEST_INTERVAL{16s};
+/**
+ * Used to keep track of the current reconciliation round with a peer.
+ * Used for both inbound (responded) and outgoing (requested/initiated) reconciliations.
+ */
+enum ReconPhase {
+    RECON_NONE,
+    RECON_INIT_REQUESTED,
+    RECON_INIT_RESPONDED,
+    RECON_EXT_REQUESTED,
+    RECON_EXT_RESPONDED,
+};
 
 /**
  * This struct is used to keep track of the reconciliations with a given peer,
@@ -70,4 +91,7 @@ struct ReconState {
      * this set with a similar set on the other side of the connection.
      */
     std::set<uint256> m_local_set;
+
+    /** Keep track of the outgoing reconciliation with the peer. */
+    ReconPhase m_outgoing_recon{RECON_NONE};
 };

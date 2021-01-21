@@ -353,6 +353,13 @@ private:
     /** Send a version message to a peer */
     void PushNodeVersion(CNode& pnode, int64_t nTime);
 
+    /**
+     * Reconciliations are requested periodically:
+     * every RECON_REQUEST_INTERVAL seconds we pick a peer from the queue.
+     */
+    std::chrono::microseconds m_next_recon_request{0};
+    void UpdateNextReconRequest(std::chrono::microseconds now) EXCLUSIVE_LOCKS_REQUIRED(m_recon_queue_mutex);
+
     const CChainParams& m_chainparams;
     CConnman& m_connman;
     /** Pointer to this node's banman. May be nullptr - check existence before dereferencing. */
@@ -984,6 +991,11 @@ void PeerManagerImpl::AddTxAnnouncement(const CNode& node, const GenTxid& gtxid,
         m_txrequest.CountInFlight(nodeid) >= MAX_PEER_TX_REQUEST_IN_FLIGHT;
     if (overloaded) delay += OVERLOADED_PEER_TX_DELAY;
     m_txrequest.ReceivedInv(nodeid, gtxid, preferred, current_time + delay);
+}
+
+void PeerManagerImpl::UpdateNextReconRequest(std::chrono::microseconds now)
+{
+    m_next_recon_request = now + RECON_REQUEST_INTERVAL / m_recon_queue.size();
 }
 
 // This function is used for testing the stale tip eviction logic, see
@@ -4912,6 +4924,31 @@ bool PeerManagerImpl::SendMessages(CNode* pto)
         }
         if (!vInv.empty())
             m_connman.PushMessage(pto, msgMaker.Make(NetMsgType::INV, vInv));
+        //
+        // Message: reconciliation request
+        //
+        LOCK(m_recon_queue_mutex);
+        if (m_recon_queue.size() > 0) {
+            // Request transaction reconciliation periodically to efficiently exchange transactions.
+            // To make reconciliation predictable and efficient, we reconcile with peers in order based on the queue,
+            // and with a delay between requests.
+            if (m_next_recon_request < current_time && m_recon_queue.back() == pto) {
+                LOCK(peer->m_recon_state_mutex);
+                assert(peer->m_recon_state->m_responder); // Should not be in the queue otherwise
+                if (peer->m_recon_state->m_outgoing_recon != RECON_NONE) {
+                    // Do not initiate a new reconciliation if the old one is still in progress
+                    LogPrint(BCLog::NET, "Previous reconciliation with peer=%d is still ongoing, not initiating a new one\n", pto->GetId());
+                } else {
+                    uint16_t local_recon_set_size = peer->m_recon_state->m_local_set.size();
+                    uint16_t q(peer->m_recon_state->m_local_q * Q_PRECISION);
+                    m_connman.PushMessage(pto, msgMaker.Make(NetMsgType::REQRECON, local_recon_set_size, q));
+                    peer->m_recon_state->m_outgoing_recon = RECON_INIT_REQUESTED;
+                }
+                UpdateNextReconRequest(current_time);
+                m_recon_queue.pop_back();
+                m_recon_queue.push_front(pto);
+            }
+        }
 
         // Detect whether we're stalling
         current_time = GetTime<std::chrono::microseconds>();
