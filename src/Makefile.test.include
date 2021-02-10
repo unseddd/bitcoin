@@ -255,6 +255,7 @@ test_fuzz_fuzz_SOURCES = \
  test/fuzz/random.cpp \
  test/fuzz/rbf.cpp \
  test/fuzz/reconciliation_compute_short_id.cpp \
+ test/fuzz/reconciliation_compute_sketch.cpp \
  test/fuzz/rolling_bloom_filter.cpp \
  test/fuzz/script.cpp \
  test/fuzz/script_assets_test_minimizer.cpp \
