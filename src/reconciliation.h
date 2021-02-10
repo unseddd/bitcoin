@@ -11,13 +11,13 @@ static constexpr uint16_t Q_PRECISION{(2 << 14) - 1};
  * reconciliation metadata (sketch sizes etc.), which would nullify the efficiency.
  * Less frequent reconciliations would introduce high transaction relay latency.
  */
-static constexpr std::chrono::microseconds RECON_REQUEST_INTERVAL{16s};
+static constexpr std::chrono::microseconds RECON_REQUEST_INTERVAL{16000000};
 /**
  * Interval between responding to peers' reconciliation requests.
  * We don't respond to reconciliation requests right away because that would enable monitoring
  * when we receive transactions (privacy leak).
  */
-static constexpr std::chrono::microseconds RECON_RESPONSE_INTERVAL{2s};
+static constexpr std::chrono::microseconds RECON_RESPONSE_INTERVAL{2000000};
 /** The size of the field, used to compute sketches to reconcile transactions (see BIP-330). */
 static constexpr unsigned int RECON_FIELD_SIZE = 32;
 /**
